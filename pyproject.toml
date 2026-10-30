@@ -19,5 +19,8 @@ py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["evidence_opd*", "trainer*", "workers*", "test*"]
+include = ["evidence_opd*", "trainer*", "workers*", "test*", "data*"]
 exclude = ["validation*"]
+
+[tool.setuptools.package-data]
+data = ["manifest.json", "paired/*/*.jsonl.xz", "baseline/*/*.jsonl.xz", "references/*/*.jsonl.xz", "qasper/*/*.jsonl.xz"]

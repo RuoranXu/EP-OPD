@@ -13,7 +13,7 @@ models:
 run:
   name: ep_opd
 data:
-  cache: ${oc.env:PAIRED_CACHE_PATH,data/paired_cache.pt}
+  cache: ${oc.env:PAIRED_CACHE_PATH,data/cache/paired_cache.pt}
   max_prompt_tokens: 32000
   max_response_tokens: 4096
   microbatch_max_documents: 8
@@ -54,7 +54,7 @@ training:
     maximum_f1_drop: 0.1
     maximum_eos_drop: 0.05
     maximum_repetitive_fraction: 0.1
-    original_references: ${oc.env:QASPER_DEV_REFERENCES,data/qasper_validation_clean.jsonl}
+    original_references: ${oc.env:QASPER_DEV_REFERENCES,data/cache/qasper_development_references.jsonl}
   clean_content_weight: 0.5
   clean_eos_weight: 2.0
   teacher_stop_weight: 0.5

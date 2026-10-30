@@ -1,8 +1,8 @@
 """Score complete JSONL predictions without changing prompts or selecting answers by gold.
 
-python -m test.evaluate --cache data/paired_cache.pt --split test --predictions outputs/test.jsonl
+python -m test.evaluate --split test --predictions outputs/test.jsonl
 Optional --references supplies original QASPER JSONL id/gold_answers records.
-For QASPER JSONL, use --qasper-references with id/gold_answers and id/text predictions.
+For bundled QASPER use --qasper; external references use --qasper-references.
 """
 import argparse
 import hashlib
@@ -54,14 +54,22 @@ def main():
     parser.add_argument('--split', choices=['development', 'test'], default='test')
     parser.add_argument('--references')
     parser.add_argument('--qasper-references')
+    parser.add_argument('--qasper', action='store_true')
     args = parser.parse_args()
     path = Path(args.predictions)
     predictions = rows(path)
+    from data.prepare import CACHE, references as bundled_references
+    if args.qasper:
+        args.qasper_references = str(bundled_references('development'))
     if args.qasper_references:
         result = qasper(rows(args.qasper_references), predictions)
     else:
         if not args.cache:
-            parser.error('--cache is required for paired evaluation')
+            args.cache = str(CACHE/'paired_cache.pt')
+            if not args.references:
+                args.references = str(bundled_references(args.split))
+        if not Path(args.cache).is_file():
+            parser.error('paired cache missing; run python -m data.prepare with local tokenizers first')
         import torch
         payload = torch.load(args.cache, map_location='cpu', weights_only=False)
         references = ({row['id']: row['gold_answers'] for row in rows(args.references)}

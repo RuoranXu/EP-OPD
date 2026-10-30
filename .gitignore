@@ -3,7 +3,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env*
-data/
+data/cache/
 models/
 outputs/
 *.pt

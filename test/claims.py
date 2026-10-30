@@ -109,7 +109,8 @@ def main():
     import torch
     parser = argparse.ArgumentParser()
     parser.add_argument('--predictions', required=True)
-    parser.add_argument('--cache', required=True)
+    from data.prepare import CACHE
+    parser.add_argument('--cache', default=str(CACHE/'paired_cache.pt'))
     parser.add_argument('--split', choices=['development', 'test'], required=True)
     parser.add_argument('--workers', type=int, default=6)
     args = parser.parse_args()

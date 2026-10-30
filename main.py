@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 
-def backend_config(config):
+def backend_config(config, prepare_data=False):
     from evidence_opd.config import load_config
     backend = OmegaConf.merge(OmegaConf.create(load_config(ROOT / config.method.backend_config)),
                               config.backend_overrides)
@@ -43,6 +43,9 @@ def backend_config(config):
     backend.experiment.seed = int(config.trainer.seed)
     backend.run.name = name
     backend = OmegaConf.to_container(backend, resolve=True)
+    if prepare_data:
+        from data.prepare import prepare_training
+        prepare_training(backend, config.method.entry)
     path = ROOT / 'outputs/configs' / (name + '.yaml')
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(OmegaConf.to_yaml(OmegaConf.create(backend)), encoding='utf8')
@@ -59,7 +62,7 @@ def main(config: DictConfig):
         raise ValueError('this exact-logit recipe currently supports one shared-filesystem node')
     if config.method.entry == 'sft' and config.trainer.seed != 42:
         raise ValueError('the exported SFT schedule is frozen at seed 42')
-    path, _ = backend_config(config)
+    path, _ = backend_config(config, prepare_data=True)
     args = ['--config', str(path)]
     if config.method.entry != 'baseline':
         args += ['--size', config.trainer.size]

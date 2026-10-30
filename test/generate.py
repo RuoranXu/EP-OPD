@@ -1,13 +1,14 @@
 """Matched greedy generation; labels never enter the model input.
 
-python -m test.generate --model models/Qwen3-4B-Base --cache data/paired_cache.pt \
+python -m test.generate --model models/Qwen3-4B-Base \
     --split test --output outputs/base_test.jsonl
-For full QASPER, --inputs is JSONL containing id, paper_id and prompt_ids.
+For bundled full QASPER use --qasper, or supply --inputs with id, paper_id and prompt_ids.
 All compared checkpoints must use the same input file and generation settings.
 """
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 
@@ -33,14 +34,17 @@ def key(row):
 
 
 def main():
+    from data.prepare import paired_cache, qasper_inputs
     import torch
     from vllm import LLM, SamplingParams, __version__ as vllm_version
     from evidence_opd.train.stop_contract import generation_options, VERSION
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', required=True)
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group()
     source.add_argument('--cache')
     source.add_argument('--inputs')
+    source.add_argument('--qasper', action='store_true')
+    parser.add_argument('--teacher-tokenizer', default=os.environ.get('TEACHER_MODEL_PATH', 'models/Qwen3-30B-A3B-Instruct-2507'))
     parser.add_argument('--split', choices=['development', 'test'], default='test')
     parser.add_argument('--output', required=True)
     parser.add_argument('--max-new-tokens', type=int, default=32768)
@@ -48,6 +52,10 @@ def main():
     args = parser.parse_args()
     if not 0 < args.max_new_tokens <= 32768:
         parser.error('max-new-tokens must be between 1 and 32768')
+    if args.qasper:
+        args.inputs = str(qasper_inputs(args.model))
+    if not args.inputs:
+        args.cache = str(paired_cache(args.model, args.teacher_tokenizer, args.cache))
     path = Path(args.cache or args.inputs)
     if args.cache:
         pairs = torch.load(path, map_location='cpu', weights_only=False)[args.split]

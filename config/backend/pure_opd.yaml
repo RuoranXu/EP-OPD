@@ -11,10 +11,10 @@ models:
   ema_tokenizer: ${oc.env:EMA_MODEL_PATH,models/Qwen3-4B}
   trust_remote_code: false
 data:
-  raw_dir: data/raw/qasper
-  processed_dir: data/processed/qasper
-  tokenized_path: data/processed/qasper/train_tokenized.pt
-  batch_manifest: data/manifests/train_batches_seed42.jsonl
+  raw_dir: data/baseline/train
+  processed_dir: data/cache
+  tokenized_path: ${oc.env:BASELINE_CACHE_PATH,data/cache/baseline_train.pt}
+  batch_manifest: ${oc.env:BASELINE_BATCH_MANIFEST,data/cache/baseline_batches.jsonl}
   split: train
   max_prompt_tokens: 8192
   max_response_tokens: 256
