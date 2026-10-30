@@ -1,4 +1,3 @@
-"""Complete, method-blind CSP labels with strict coverage and resumable identity."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 import hashlib

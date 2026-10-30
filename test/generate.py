@@ -1,10 +1,3 @@
-"""Matched greedy generation; labels never enter the model input.
-
-python -m test.generate --model models/Qwen3-4B-Base \
-    --split test --output outputs/base_test.jsonl
-For bundled full QASPER use --qasper, or supply --inputs with id, paper_id and prompt_ids.
-All compared checkpoints must use the same input file and generation settings.
-"""
 import argparse
 import hashlib
 import json

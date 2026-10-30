@@ -1,4 +1,3 @@
-"""Sanitized replay and teacher-stop horizons, bound by the new training entry only."""
 import torch
 import torch.distributed as dist
 from evidence_opd.data import collate_replay
@@ -23,12 +22,7 @@ def sanitize_batch(tokenizer,pairs,packet,device):
 
 def backward_replay(context,teacher_batch,teacher,student,prompts,responses,mask,valid,tokenizer,
                     normalizer,chunk,vocab,group,stop_weight=.5,threshold=.5):
-    """Teacher-selected STOP ends the KD horizon; no later token can receive KD gradient.
-
-    Teacher logits are projected twice from one frozen backbone forward: a first
-    pass finds the causal stop position, the second transfers only retained rows.
-    Invalid/repetitive trajectories were removed before the teacher forward.
-    """
+    """Teacher-selected STOP ends the KD horizon; no later token can receive KD gradient."""
     rank=context.rank;device=context.device
     stats=dict(rkl=0.,teacher_stop=0.,teacher_early_stops=0,kd_tokens=0)
     if not teacher_batch.selected_tokens:return stats

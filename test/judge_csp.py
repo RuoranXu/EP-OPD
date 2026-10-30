@@ -1,4 +1,3 @@
-"""CSP v2: cover complete long responses in bounded spans, with lossless cache reuse."""
 import argparse
 import copy
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED

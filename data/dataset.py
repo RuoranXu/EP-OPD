@@ -1,4 +1,3 @@
-"""Read the shipped JSONL shards and verify their content before use."""
 import gzip
 import hashlib
 import json

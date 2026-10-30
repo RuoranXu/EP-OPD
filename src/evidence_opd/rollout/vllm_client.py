@@ -1,4 +1,3 @@
-"""Local token-only vLLM service; every request is tied to an explicit policy version."""
 import atexit
 import json
 import os

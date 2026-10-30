@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Four-GPU exact EP-OPD: student, TP=2 teacher, bounded on-policy rollout worker."""
 import argparse
 from collections import deque
 from datetime import timedelta
@@ -109,12 +108,7 @@ def canonical_score(model, prompt, answer, tokenizer, device):
 
 
 def backward_margin(model, pairs, tokenizer, device, margin, scale):
-    """Exact hinge gradient with one live canonical-answer graph at a time.
-
-    Qwen3 has zero dropout. Determine the active hinges without keeping prefix
-    activations, then recompute only scores with a nonzero derivative. Parameters
-    stay fixed throughout the update; full prefix gradients remain trainable.
-    """
+    """Exact hinge gradient with one live canonical-answer graph at a time."""
     if any(float(getattr(model.config,k,0.) or 0.) for k in ['attention_dropout','hidden_dropout','hidden_dropout_prob']):
         raise ValueError('streamed margin recomputation requires zero model dropout')
     with torch.no_grad():

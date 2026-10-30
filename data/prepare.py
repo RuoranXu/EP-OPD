@@ -1,12 +1,3 @@
-"""Prepare portable inputs for the exported trainers and metric scripts.
-
-python -m data.prepare --student-tokenizer models/Qwen3-4B-Base \
-    --teacher-tokenizer models/Qwen3-30B-A3B-Instruct-2507
-
-Original packed documents, question IDs, labels and split membership are kept.
-Each rebuilt EP prompt/target is checked against the trained cache's token hash.
-Raw shards are immutable; generated .pt/JSONL caches are ignored by git.
-"""
 from contextlib import contextmanager
 import copy
 import hashlib
@@ -54,8 +45,7 @@ def atomic_torch(path,value):
     torch.save(value,temporary);temporary.replace(path)
 
 
-def user_prompt(row,mode='normal'):
-    """The original serializer; privileged evidence appears only in teacher modes."""
+def user_prompt(row):
     blocks=[]
     for section in row['sections']:
         blocks.append(f"[{section['section_id']}] {section['section_name']}")
@@ -63,16 +53,9 @@ def user_prompt(row,mode='normal'):
     if row.get('figures_and_tables'):
         blocks.append('Figures and tables')
         blocks.extend(f"[{item['float_id']}] {item['caption']}" for item in row['figures_and_tables'])
-    privilege=''
-    if mode=='pi_ids':
-        ids=', '.join(row['evidence_ids']) or 'NONE'
-        privilege=f'\nPrivileged evidence paragraph IDs (teacher only): {ids}\n'
-    elif mode=='pi_span':
-        spans='\n'.join('- '+span for span in row['evidence_spans']) or '- NONE'
-        privilege=f'\nPrivileged evidence spans (teacher only):\n{spans}\n'
     paper='\n\n'.join(blocks)
     return (f"Title: {row['title']}\n\nAbstract: {row['abstract']}\n\n"
-            f"Question: {row['question']}\n{privilege}\nPaper (paragraph IDs are stable metadata):\n"
+            f"Question: {row['question']}\n\nPaper (paragraph IDs are stable metadata):\n"
             f"{paper}\n\nQuestion: {row['question']}\nAnswer:")
 
 
@@ -167,30 +150,42 @@ def baseline_prompt_ids(row,student,teacher,system,maximum):
         for index,paragraph in paragraphs[:count]:document['sections'][index]['paragraphs'].append(paragraph)
         if count<len(paragraphs):document['figures_and_tables']=[]
         result={'student_prompt_ids':student.encode(system+'\n\n'+user_prompt(document),add_special_tokens=False)}
-        for mode,key in [('normal','teacher_normal_ids'),('pi_ids','teacher_pi_ids'),('pi_span','teacher_pi_span_ids')]:
-            rendered=teacher.apply_chat_template([{'role':'system','content':system},
-                {'role':'user','content':user_prompt(document,mode)}],tokenize=False,
-                add_generation_prompt=True,enable_thinking=False)
-            result[key]=teacher.encode(rendered,add_special_tokens=False)
+        rendered=teacher.apply_chat_template([{'role':'system','content':system},
+            {'role':'user','content':user_prompt(document)}],tokenize=False,
+            add_generation_prompt=True,enable_thinking=False)
+        result['teacher_normal_ids']=teacher.encode(rendered,add_special_tokens=False)
         return result
     low=0;high=len(paragraphs);best=None
     while low<=high:
         middle=(low+high)//2;candidate=render(middle)
         if max(map(len,candidate.values()))<=maximum:best=candidate;low=middle+1
         else:high=middle-1
-    if best is None:raise ValueError('question/privileged evidence exceeds configured prompt budget')
+    if best is None:raise ValueError('question exceeds configured prompt budget')
     return best
 
 
 def baseline_cache(config):
     from transformers import AutoTokenizer
+    from evidence_opd.methods import teacher_prompt_key
+    from .privileged import load_privileged
+    prompt_key=teacher_prompt_key(config)
+    privileged_path=config['data'].get('privileged_path')
+    if prompt_key!='teacher_normal_ids' and (not privileged_path or not Path(privileged_path).is_file()):
+        raise ValueError('PI baselines require external data.privileged_path (PRIVILEGED_DATA_PATH); construction is not included')
     student=AutoTokenizer.from_pretrained(config['models']['student_tokenizer'],local_files_only=True)
     model_key='ema_tokenizer' if config['method']['family']=='ema_teacher' else 'teacher_tokenizer'
     teacher=AutoTokenizer.from_pretrained(config['models'][model_key],local_files_only=True)
     if student.get_vocab()!=teacher.get_vocab():raise ValueError('baseline teacher/student vocabularies differ')
     data=config['data'];training=config['training'];seed=int(config['experiment']['seed'])
+    source=list(read_rows('baseline/train'))
+    privileged=(load_privileged(privileged_path,prompt_key,{str(row['id']) for row in source},
+        int(data['max_prompt_tokens']),set(teacher.get_vocab().values()))
+        if prompt_key!='teacher_normal_ids' else {})
     identity=dict(dataset_manifest_sha256=manifest_digest(),system=config['prompt']['system'],
         vocabulary=token_digest(student.get_vocab()),teacher_chat_template=teacher.chat_template,
+        teacher_prompt=config['method'].get('teacher_prompt','normal'),
+        privileged_inputs_sha256=(hashlib.sha256(Path(privileged_path).read_bytes()).hexdigest() if privileged else None),
+        preparation_version=2,
         max_prompt_tokens=data['max_prompt_tokens'],max_response_tokens=data['max_response_tokens'],
         student_budget=data['student_max_batch_tokens'],teacher_budget=data['teacher_max_batch_tokens'],
         buckets=data['length_buckets'],gradient_accumulation=training['gradient_accumulation_steps'],seed=seed,
@@ -200,10 +195,11 @@ def baseline_cache(config):
     if not path.exists() or not batches_path.exists():
         with preparation_lock(path):
             records=[]
-            for row in read_rows('baseline/train'):
+            for row in source:
                 values=baseline_prompt_ids(row,student,teacher,config['prompt']['system'],int(data['max_prompt_tokens']))
+                if privileged:values[prompt_key]=privileged[str(row['id'])]
                 values.update(id=row['id'],paper_id=row['paper_id'],input_length=len(values['student_prompt_ids']),
-                    max_teacher_input_length=max(len(values[key]) for key in ['teacher_normal_ids','teacher_pi_ids','teacher_pi_span_ids']))
+                    max_teacher_input_length=max(len(ids) for key,ids in values.items() if key.startswith('teacher_')))
                 records.append(values)
             grouped={int(boundary):[] for boundary in data['length_buckets']};rng=random.Random(seed)
             for row in records:

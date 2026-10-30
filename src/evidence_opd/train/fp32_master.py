@@ -1,10 +1,3 @@
-"""AdamW with CPU FP32 masters and moments for BF16 compute parameters.
-
-Copies happen once per optimizer update, after gradient accumulation. This
-keeps low magnitude updates across steps without adding GPU optimizer memory.
-The original BF16 run remains a separate experiment and cannot be resumed
-into this optimizer.
-"""
 import torch
 
 

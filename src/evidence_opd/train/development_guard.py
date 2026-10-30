@@ -1,4 +1,3 @@
-"""Fixed, held-out behavior probes; these never enter the gradient objective."""
 import hashlib
 import json
 from pathlib import Path

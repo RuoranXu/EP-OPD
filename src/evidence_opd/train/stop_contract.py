@@ -1,4 +1,3 @@
-"""One shared completion boundary: preserve the SFT END marker before EOS."""
 from ._termination import (EOS_IDS,STUDENT_EOS,END_MARKER,ID_PATTERN,SYSTEM,content,encode_prefix,
     inspect_completion,repeated,semantic_stop_kl,stop_nll,teacher_stop_positions)
 
@@ -27,11 +26,7 @@ _TOKENIZERS={}
 
 
 class CompletionBoundaryProcessor:
-    """A complete evidence line still needs its learned END marker, not premature EOS.
-
-    Inspect a bounded token suffix. Full-response decoding and repeated line
-    scans on every newline made pathological 32K baseline outputs expensive.
-    """
+    """A complete evidence line still needs its learned END marker, not premature EOS."""
     def __init__(self,tokenizer_path,interval=32):self.path=str(tokenizer_path);self.interval=interval
 
     def __call__(self,prompt_ids,response_ids,scores):

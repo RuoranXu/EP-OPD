@@ -1,4 +1,3 @@
-"""Chunked clean-completion supervision with EOS weighting independent of response length."""
 import torch
 from evidence_opd.data import collate_replay
 from evidence_opd.teacher.response_logits import selected_response_hidden

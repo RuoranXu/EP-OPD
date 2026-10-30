@@ -1,4 +1,3 @@
-"""Explicit epoch extensions with continuous learning rates and exact recovery."""
 import copy
 import math
 

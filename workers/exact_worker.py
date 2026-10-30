@@ -1,4 +1,3 @@
-"""VERL worker dispatch for the exact-KL model-parallel training kernels."""
 import os
 from pathlib import Path
 import runpy

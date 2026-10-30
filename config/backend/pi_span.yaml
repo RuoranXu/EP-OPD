@@ -11,6 +11,7 @@ models:
   ema_tokenizer: ${oc.env:EMA_MODEL_PATH,models/Qwen3-4B}
   trust_remote_code: false
 data:
+  privileged_path: ${oc.env:PRIVILEGED_DATA_PATH,data/privileged/inputs.jsonl}
   raw_dir: data/baseline/train
   processed_dir: data/cache
   tokenized_path: ${oc.env:BASELINE_CACHE_PATH,data/cache/baseline_train.pt}

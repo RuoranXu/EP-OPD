@@ -1,4 +1,3 @@
-"""Explicit completion boundaries and a shared semantic STOP event for Base/Instruct KD."""
 from dataclasses import dataclass
 import re
 EOS_IDS = (151643, 151645)

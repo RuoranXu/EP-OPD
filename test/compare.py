@@ -1,8 +1,3 @@
-"""Paired source-paper bootstrap for matched predictions after test.evaluate.
-
-python -m test.compare --baseline outputs/sft_test.jsonl --candidate outputs/ep_test.jsonl
-Optional CSP labels must completely cover both methods; no missing labels become zeros.
-"""
 import argparse
 import json
 from pathlib import Path

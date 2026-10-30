@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Dedicated one-GPU vLLM process, isolated from the trainer's NCCL process groups."""
 import argparse
 import ctypes
 import hashlib

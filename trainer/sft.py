@@ -1,4 +1,3 @@
-"""Four-replica synchronous SFT on verified short completions, including explicit EOS."""
 import argparse
 from datetime import timedelta
 import hashlib

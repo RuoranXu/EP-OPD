@@ -1,6 +1,3 @@
-"""Keep both teacher and student replay inside their shared context budget."""
-
-
 def response_cap(student_length, teacher_length, requested_cap, context_window):
     if min(student_length, teacher_length, requested_cap, context_window) < 1:
         raise ValueError('length budgets must be positive')

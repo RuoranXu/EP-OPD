@@ -1,4 +1,3 @@
-"""Unassisted EOS/format/F1 gate; production stopping rules are deliberately disabled."""
 import argparse
 import hashlib
 import json

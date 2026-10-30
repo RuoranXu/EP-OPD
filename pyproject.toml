@@ -23,4 +23,4 @@ include = ["evidence_opd*", "trainer*", "workers*", "test*", "data*"]
 exclude = ["validation*"]
 
 [tool.setuptools.package-data]
-data = ["manifest.json", "paired/*/*.jsonl.xz", "baseline/*/*.jsonl.xz", "references/*/*.jsonl.xz", "qasper/*/*.jsonl.xz"]
+data = ["manifest.json", "paired/*/*.jsonl.xz", "baseline/*/*.jsonl.xz", "references/*/*.jsonl.xz", "qasper/*/*.jsonl.xz", "privileged/*.jsonl"]

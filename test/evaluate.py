@@ -1,9 +1,3 @@
-"""Score complete JSONL predictions without changing prompts or selecting answers by gold.
-
-python -m test.evaluate --split test --predictions outputs/test.jsonl
-Optional --references supplies original QASPER JSONL id/gold_answers records.
-For bundled QASPER use --qasper; external references use --qasper-references.
-"""
 import argparse
 import hashlib
 import json

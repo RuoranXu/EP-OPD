@@ -1,4 +1,3 @@
-"""QASPER/SQuAD answer F1, without thresholds or data-dependent extraction."""
 from collections import Counter
 import re
 import string

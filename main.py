@@ -1,13 +1,3 @@
-"""VERL single-controller exact-KL recipe, not a PPO/sampled-KL substitution.
-
-python -m main method=ep_opd trainer.size=4b
-python -m main method=pure_opd
-python -m main method=sft
-
-Supply local models/caches through config/backend or backend_overrides.*.
-The EP actor, two tensor-parallel teacher workers and rollout worker use four
-exclusive GPUs on one node. Baselines use actor + two TP teacher ranks.
-"""
 import os
 from pathlib import Path
 import sys

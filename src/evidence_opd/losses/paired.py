@@ -1,4 +1,3 @@
-"""Equation (2): length-normalized canonical-answer preferences, no teacher gradients."""
 import torch
 
 

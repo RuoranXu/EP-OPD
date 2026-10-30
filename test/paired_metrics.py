@@ -1,4 +1,3 @@
-"""Deterministic atomic-answer scoring for the paper's paired evaluations."""
 from decimal import Decimal, InvalidOperation
 import re
 import unicodedata
