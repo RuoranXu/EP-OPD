@@ -1,0 +1,4 @@
+name: pure_opd
+entry: baseline
+workers: 3
+backend_config: config/backend/pure_opd.yaml
