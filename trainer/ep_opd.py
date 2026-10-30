@@ -36,6 +36,7 @@ from evidence_opd.train.optimizer import build_optimizer, build_scheduler, ep_le
 from evidence_opd.train.checkpoint import save_student_weights
 from evidence_opd.train.budget import checkpoint_steps as budget_checkpoint_steps, validate_epoch_extension, resume_scheduler, recovery_total_updates
 from evidence_opd.train.development_guard import prepare_probe,summarize_probe,generate_probe,assess,improves,exchange_probe_tokens
+from evidence_opd.profiling import UpdateLogger,UPDATE_TIMING
 
 __all__ = ['main', 'semantic_stop_kl', 'sanitize_batch', 'backward_replay']
 
@@ -267,6 +268,7 @@ def main():
                       'objective':'semantic_STOP_RKL_before_teacher_stop + 0.5 paired_hinge + 0.5 clean_content_CE + 2 canonical_EOS_CE + 0.5 semantic_terminal_CE', 'initialization':'verified short-completion SFT', 'stop_protocol':VERSION,
                       'weights_sync':'each update','rollout_queue_bound':2,'resumed_at_update':start,
                       'rollout_backend':backend,
+                      'update_timing':UPDATE_TIMING,
                       'budget_extension':budget_extension,'checkpoint_updates':sorted(checkpoint_steps),
                       'rollout_transport':'cpu_gloo' if backend=='vllm' else 'cuda_nccl',
                       'margin_implementation':'bounded_batched_or_full_prefix_score_recomputation',
@@ -276,7 +278,7 @@ def main():
                            'src/evidence_opd/train/stop_contract.py','src/evidence_opd/train/stop_training.py','src/evidence_opd/train/short_supervision.py',
                            'src/evidence_opd/rollout/length_budget.py',
                            'src/evidence_opd/train/budget.py','src/evidence_opd/train/optimizer.py',
-                           'src/evidence_opd/train/fp32_master.py']}}
+                           'src/evidence_opd/train/fp32_master.py','src/evidence_opd/profiling/timers.py']}}
             if guard_config:
                 manifest['development_guard']=guard_identity
                 manifest['source_sha256']['src/evidence_opd/train/development_guard.py']=hashlib.sha256(
@@ -328,11 +330,12 @@ def main():
     if rank==0:
         metrics=(output/'metrics.jsonl').open('a',buffering=1)
         metric_history=[json.loads(x) for x in (output/'metrics.jsonl').read_text().split('\n') if x.strip()]
+        update_log=UpdateLogger(output/'updates.jsonl',resume=bool(start))
     cap=config['data']['max_response_tokens']
     chunk=config['communication']['kl_chunk_tokens']
     vocab=json.loads((Path(config['models']['teacher'])/'config.json').read_text())['vocab_size']
     for step in range(start,len(plan)):
-        step_started=time.monotonic()
+        if rank==0:update_log.start(step+1)
         epoch,pairs=plan[step]
         batches=list(microbatches(pairs,config['data']['microbatch_max_documents'],
                                  config['data']['microbatch_padded_token_budget'],cap,context_window))
@@ -492,7 +495,7 @@ def main():
             optimizer.zero_grad(set_to_none=True)
             elapsed=time.monotonic()-started
             row=dict(sums,step=step+1,total_updates=len(plan),epoch=epoch,grad_norm=float(norm),
-                     lr=optimizer.param_groups[0]['lr'],seconds=elapsed,tokens_per_second=sums['tokens']/elapsed,
+                     lr=optimizer.param_groups[0]['lr'],compute_seconds=elapsed,tokens_per_second=sums['tokens']/elapsed,
                      pairs=len(pairs),policy_version=step+1,rollout_backend=backend,
                      peak_allocated_gib=torch.cuda.max_memory_allocated(device)/1024**3,
                      peak_reserved_gib=torch.cuda.max_memory_reserved(device)/1024**3)
@@ -506,8 +509,10 @@ def main():
                     save_student_weights(student,tokenizer,path,{'optimizer_step':step+1,'data_hash':data_hash,
                                          'seed':seed,'size':args.size,'objective':'ep_opd'})
             row['checkpoint_write_seconds']=time.monotonic()-checkpoint_started
-            row['wall_seconds_including_sync_and_checkpoint']=time.monotonic()-step_started
-            row['unix_time']=time.time()
+        dist.barrier()
+        if rank==0:
+            torch.cuda.synchronize(device)
+            row.update(update_log.finish(stage='ep_opd',total_updates=len(plan)))
             metrics.write(json.dumps(row)+'\n')
             print(json.dumps(row),flush=True)
             metric_history.append(row)
@@ -517,7 +522,6 @@ def main():
             if health:
                 (output/'response_health_stop.json').write_text(json.dumps(health,indent=2))
                 raise RuntimeError('response health gate stopped training after saving recovery: '+json.dumps(health))
-        dist.barrier()
     if rank==0:
         (output/'training_complete.json').write_text(json.dumps({'completed_updates':len(plan),'data_hash':data_hash}))
         metrics.close()

@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import random
 import sys
-import time
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'src'),str(ROOT)]
@@ -21,6 +20,7 @@ from evidence_opd.train.short_supervision import backward_clean
 from evidence_opd.train.stop_contract import VERSION
 from evidence_opd.data import collate_replay
 from evidence_opd.teacher.response_logits import selected_response_hidden
+from evidence_opd.profiling import UpdateLogger,UPDATE_TIMING
 
 
 def evaluate(model,rows,tokenizer,device):
@@ -70,16 +70,19 @@ def main():
             global_batch_rows=globalbatch,learning_rate=settings['learning_rate'],content_weight=1.,eos_weight=2.,
             eos_weight_independent_of_length=True,gradient_splits=['train'],development_selection='weighted clean completion CE; unassisted behavior gate follows',
             cache_sha256=hashlib.sha256(cache.read_bytes()).hexdigest(),source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            synchronization='one gradient all-reduce per update across four full replicas; FP32 CPU master optimizer'),indent=2))
-    dist.barrier();start=time.monotonic();best=float('inf');step=0
+            synchronization='one gradient all-reduce per update across four full replicas; FP32 CPU master optimizer',
+            update_timing=UPDATE_TIMING),indent=2))
+    dist.barrier();best=float('inf');step=0
     metric=(folder/'metrics.jsonl').open('a',buffering=1) if rank==0 else None
+    update_log=UpdateLogger(folder/'updates.jsonl') if rank==0 else None
     for epoch in range(int(settings['epochs'])):
         order=list(range(len(training)));random.Random(42+epoch).shuffle(order)
         for begin in range(0,len(order),globalbatch):
+            if rank==0:update_log.start(step+1)
             batch=[training[i] for i in order[begin:begin+globalbatch]]
             # Empty final ranks participate with zero gradients; fixed global divisor
             # keeps the final short update correctly normalized.
-            local=batch[rank::world];optimizer.zero_grad(set_to_none=True);loss=0.;tick=time.monotonic()
+            local=batch[rank::world];optimizer.zero_grad(set_to_none=True);loss=0.
             for prompt,target in sorted(local,key=lambda x:len(x[0])):
                 stats=backward_clean(model,[prompt],[target],tokenizer,device,len(batch),1.,2.,128)
                 loss+=stats['content']+stats['eos']
@@ -93,11 +96,8 @@ def main():
             if not torch.isfinite(norm):raise FloatingPointError('nonfinite SFT gradient')
             optimizer.step();scheduler.step();optimizer.zero_grad(set_to_none=True);step+=1
             record=dict(step=step,total_updates=steps,epoch=epoch+1,documents=len(batch),loss=float(scalar),grad_norm=float(norm),
-                lr=optimizer.param_groups[0]['lr'],seconds=time.monotonic()-tick,elapsed_seconds=time.monotonic()-start,
-                peak_allocated_gib=torch.cuda.max_memory_allocated(device)/1024**3,unix_time=time.time())
-            if rank==0:
-                metric.write(json.dumps(record)+'\n');print(json.dumps(record),flush=True)
-                (folder/'progress.json').write_text(json.dumps(record))
+                lr=optimizer.param_groups[0]['lr'],
+                peak_allocated_gib=torch.cuda.max_memory_allocated(device)/1024**3)
             check=step%int(settings['development_every_updates'])==0 or begin+globalbatch>=len(order) or bool(args.smoke_updates and step>=args.smoke_updates)
             if check:
                 score=torch.tensor(evaluate(model,development,tokenizer,device),device=device)
@@ -114,6 +114,11 @@ def main():
                         temporary.replace(folder/'best')
                         (folder/'selection.json').write_text(json.dumps(report))
                 dist.barrier()
+            if rank==0:
+                torch.cuda.synchronize(device)
+                record.update(update_log.finish(stage='sft',total_updates=steps))
+                metric.write(json.dumps(record)+'\n');print(json.dumps(record),flush=True)
+                (folder/'progress.json').write_text(json.dumps(record))
             if args.smoke_updates and step>=args.smoke_updates:break
         if args.smoke_updates and step>=args.smoke_updates:break
     if rank==0:

@@ -24,7 +24,7 @@ from evidence_opd.models import (
     load_tokenizer,
     model_identity,
 )
-from evidence_opd.profiling import JsonlMetrics
+from evidence_opd.profiling import JsonlMetrics, UpdateLogger, UPDATE_TIMING
 from evidence_opd.rollout import generate_responses
 from evidence_opd.teacher.hf_tp_worker import create_teacher_mesh, load_tp_teacher
 from evidence_opd.teacher.nccl_transport import (
@@ -134,6 +134,7 @@ def _save_run_manifest(
         "total_optimizer_steps": total_steps,
         "storage_plan": storage,
         "evaluation_enabled": False,
+        "update_timing": UPDATE_TIMING,
     }
     with (output_dir / "run_manifest.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
@@ -245,6 +246,7 @@ def run_training(config: dict[str, Any], context: DistributedContext) -> None:
     temperature_scale = bool(config["method"].get("temperature_squared_scale", False))
     seed = int(config["experiment"]["seed"])
     vocab_size = int(model_identity(config["models"]["student"])["vocab_size"])
+    update_log = UpdateLogger(output_dir / "updates.jsonl") if context.is_student else None
 
     for microbatch_index, manifest_row in enumerate(manifest):
         runtime_step = int(manifest_row["runtime_optimizer_step"])
@@ -255,6 +257,8 @@ def run_training(config: dict[str, Any], context: DistributedContext) -> None:
         generated_tokens = 0
 
         if context.is_student:
+            if microbatch_index == 0 or runtime_step != int(manifest[microbatch_index-1]["runtime_optimizer_step"]):
+                update_log.start(completed_optimizer_steps+1)
             print(
                 f"[progress] run={run_name} microbatch={microbatch_index} "
                 f"optimizer_step={completed_optimizer_steps} phase=rollout",
@@ -484,6 +488,11 @@ def run_training(config: dict[str, Any], context: DistributedContext) -> None:
         del teacher_batch, teacher_hidden, student_hidden, student_hidden_gradient
         if context.is_student:
             del student_batch, source_teacher_batch, responses, response_mask
+            if is_boundary:
+                _synchronize(context.device)
+                timing = update_log.finish(stage='baseline', run=run_name,
+                    total_updates=total_optimizer_steps, microbatches=group_size)
+                print(json.dumps(timing), flush=True)
 
     if context.is_student:
         _checkpoint(
