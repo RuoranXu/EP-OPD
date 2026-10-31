@@ -1,0 +1,4 @@
+name: ep_opd
+entry: ep_opd
+workers: 4
+backend_config: config/backend/ep_opd.yaml

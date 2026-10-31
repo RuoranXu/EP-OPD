@@ -1,0 +1,113 @@
+experiment:
+  name: ep_opd
+  seed: 42
+  precision_note: Exact full-vocabulary semantic STOP RKL with paired hinge and clean-answer/EOS
+    supervision; VERL single-controller recipe.
+models:
+  student: ${oc.env:SFT_MODEL_PATH,outputs/checkpoints/sft_4b_seed42/best}
+  student_tokenizer: ${oc.env:STUDENT_MODEL_PATH,models/Qwen3-4B-Base}
+  teacher: ${oc.env:TEACHER_MODEL_PATH,models/Qwen3-30B-A3B-Instruct-2507}
+  teacher_tokenizer: ${oc.env:TEACHER_MODEL_PATH,models/Qwen3-30B-A3B-Instruct-2507}
+  trust_remote_code: false
+  base_student: ${oc.env:STUDENT_MODEL_PATH,models/Qwen3-4B-Base}
+run:
+  name: ep_opd
+data:
+  cache: ${oc.env:PAIRED_CACHE_PATH,data/cache/paired_cache.pt}
+  max_prompt_tokens: 32000
+  max_response_tokens: 4096
+  microbatch_max_documents: 8
+  microbatch_padded_token_budget: 49152
+  minimum_train_pairs: 1001
+  global_batch_pairs: 64
+  context_window: 32768
+training:
+  epochs: 4
+  learning_rate: 2.0e-07
+  betas:
+  - 0.9
+  - 0.95
+  weight_decay: 0.1
+  max_grad_norm: 1.0
+  warmup_ratio: 0.03
+  schedule: cosine
+  fused_adamw: false
+  gradient_checkpointing: true
+  pair_margin: 0.2
+  pair_weight: 0.5
+  pair_backward_padded_token_budget: 32768
+  recovery_every_updates: 1
+  optimizer_precision: fp32_master_cpu
+  learning_rate_by_size:
+    4b: 2.0e-07
+    1p7b: 2.0e-07
+  response_health:
+    maximum_cap_fraction: 0.25
+    consecutive_updates: 2
+    minimum_update: 3
+  development_guard:
+    pairs: 16
+    seed: 42
+    response_tokens: 1024
+    interval_updates: 2
+    patience: 2
+    maximum_f1_drop: 0.1
+    maximum_eos_drop: 0.05
+    maximum_repetitive_fraction: 0.1
+    original_references: ${oc.env:QASPER_DEV_REFERENCES,data/cache/qasper_development_references.jsonl}
+  clean_content_weight: 0.5
+  clean_eos_weight: 2.0
+  teacher_stop_weight: 0.5
+  teacher_stop_threshold: 0.5
+  require_sft_gate: true
+rollout:
+  backend: vllm
+  gpu_memory_utilization: 0.84
+  max_sequences: 32
+  group_documents: 32
+  do_sample: true
+  temperature: 0.8
+  top_p: 0.95
+  top_k: 0
+teacher:
+  attention_backend: sdpa
+  tp_size: 2
+communication:
+  backend: nccl
+  cpu_staging: false
+  kl_chunk_tokens: 256
+  timeout_seconds: 3600
+checkpoint:
+  local_root: ${oc.env:CHECKPOINT_DIR,outputs/checkpoints}
+  persistent_root: outputs/artifacts
+  minimum_free_bytes: 10737418240
+  selection:
+    primary: original_answer_f1
+    constraint: counterfactual_answer_f1 >= frozen_base_counterfactual_answer_f1
+    tie_break: counterfactual_answer_f1_then_earliest_update
+    note: F1 and binary correctness are reported separately.
+  selection_every_fraction: 0.125
+  minimum_filesystem_free_bytes: 10737418240
+evaluation:
+  backend: vllm
+  primary_metric: answer_f1
+  max_new_tokens: 32768
+  decoding: greedy
+  bootstrap_replicates: 10000
+  cluster: source_paper
+  variants:
+  - Dorig
+  - Dpara
+  - Dirr
+  - Ddrop
+  - Dcf
+  adaptive_context: true
+  length_note: Each response uses min(requested ceiling, 32768 - prompt length), identically for all methods.
+sft:
+  epochs: 2
+  learning_rate: 5.0e-06
+  global_batch_rows: 64
+  development_every_updates: 24
+  minimum_natural_eos_rate: 0.9
+  maximum_repetition_rate: 0.05
+  minimum_valid_completion_rate: 0.85
