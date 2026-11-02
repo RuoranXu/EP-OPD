@@ -1,4 +1,0 @@
-name: fkl_t1
-entry: baseline
-workers: 3
-backend_config: config/backend/fkl_t1.yaml
