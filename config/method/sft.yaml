@@ -1,0 +1,4 @@
+name: sft
+entry: sft
+workers: 4
+backend_config: config/backend/ep_opd.yaml

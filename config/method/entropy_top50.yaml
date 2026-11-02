@@ -1,0 +1,4 @@
+name: entropy_top50
+entry: baseline
+workers: 3
+backend_config: config/backend/entropy_top50.yaml
