@@ -1,4 +1,0 @@
-name: ema_0995
-entry: baseline
-workers: 3
-backend_config: config/backend/ema_0995.yaml

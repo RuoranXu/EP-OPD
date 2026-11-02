@@ -1,4 +1,0 @@
-name: pi_span
-entry: baseline
-workers: 3
-backend_config: config/backend/pi_span.yaml
